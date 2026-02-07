@@ -54,7 +54,7 @@ The focus is on **methodology and understanding**, not on clinical or predictive
 - Boxplots of charges by sex and region  
 - Coefficient plots with 95% CI for sex, region, and combined models  
 
-![Coefficient plot](coef_both.png)
+![Coefficient plot](plots/coef_both.png)
 ## 📌 Conclusion
 This project serves as a **learning exercise** to understand how categorical predictors are handled in regression:
 
