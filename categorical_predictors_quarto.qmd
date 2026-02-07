@@ -1,0 +1,393 @@
+---
+title: "Categorical Predictors and Dummy Variables"
+author: "Osman Omer Mustafa"
+date: "today"
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme: cosmo
+    toc-location: left
+---
+
+## Load required libraries
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(broom)
+```
+
+## Read data
+```{r message=FALSE}
+data <- read_csv("insurance.csv")
+```
+
+## Basic checks
+```{r}
+glimpse(data)
+summary(data)
+sum(is.na(data))
+```
+
+## Ensure categorical variables are factors
+```{r}
+data <- data %>% 
+  mutate(
+    sex = as.factor(sex),
+    smoker = as.factor(smoker),
+    region = as.factor(region)
+  )
+
+glimpse(data)
+```
+
+Categorical variables (sex, smoker, region) have been successfully converted to factors, 
+enabling proper treatment in regression models. R will automatically create dummy variables for these predictors.
+
+## Exploratory Data Analysis
+
+### Summary statistics by sex
+```{r}
+summary_sex <- data %>% 
+  group_by(sex) %>% 
+  summarise(
+    n = n(),
+    mean_charges = mean(charges),
+    sd_charges = sd(charges),
+    median_charges = median(charges)
+  )
+summary_sex %>% knitr::kable(caption = "Insurance Charges by Sex")
+```
+
+Males and females show relatively similar average charges, with males slightly higher.
+The difference appears modest compared to other factors like smoking status.
+
+### Summary statistics by region
+```{r}
+summary_region <- data %>% 
+  group_by(region) %>% 
+  summarise(
+    n = n(),
+    mean_charges = mean(charges),
+    sd_charges = sd(charges),
+    median_charges = median(charges)
+  )
+summary_region %>% knitr::kable(caption = "Insurance Charges by Region")
+```
+
+Regional variation in charges is present but relatively small. 
+The southeast region shows the highest average charges, while the southwest shows the lowest.
+
+### Charges by sex
+```{r}
+ggplot(data, aes(x = sex, y = charges, fill = sex)) +
+  geom_boxplot() +
+  labs(
+    x = "Sex",
+    y = "Insurance Charges (USD)",
+    title = "Insurance Charges by Sex"
+  ) +
+  theme(legend.position = "none") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The boxplots reveal overlapping distributions between males and females, 
+with similar medians and ranges. Both groups contain outliers with exceptionally high charges.
+
+### Charges by region
+```{r}
+ggplot(data, aes(x = region, y = charges, fill = region)) +
+  geom_boxplot() +
+  labs(
+    x = "Region",
+    y = "Insurance Charges (USD)",
+    title = "Insurance Charges by Region"
+  ) +
+  theme(legend.position = "none") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Regional distributions are remarkably similar, with comparable medians and spread. 
+This visual similarity suggests region may not be a strong predictor of insurance charges.
+
+## Understanding Dummy Variables
+
+### Check default contrasts
+```{r}
+contrasts(data$sex)
+contrasts(data$region)
+```
+
+R uses treatment (dummy) coding by default. For sex, female is the reference category (coded as 0), 
+while male is coded as 1. For region, northeast serves as the baseline, 
+with the other three regions represented by dummy variables.
+
+### Check levels order
+```{r}
+levels(data$sex)
+levels(data$region)
+```
+
+The alphabetically first category becomes the baseline by default. 
+This can be changed using the `relevel()` function if a different reference category is desired.
+
+## Model 1: Sex Only
+
+Fit a regression model using sex as the sole predictor to examine its relationship with insurance charges.
+
+```{r}
+model_sex <- lm(charges ~ sex, data = data)
+```
+
+### Model results
+```{r}
+tidy_sex <- tidy(model_sex, conf.int = TRUE)
+tidy_sex %>% knitr::kable(caption = "Sex Model Coefficients")
+```
+
+The intercept represents average charges for females (baseline). 
+The sexmale coefficient indicates males pay approximately $1,387 more than females on average. 
+This difference is statistically significant (p < 0.001).
+
+### Model performance
+```{r}
+glance_sex <- glance(model_sex)
+glance_sex %>% knitr::kable(caption = "Sex Model Performance")
+```
+
+The model explains only about 0.5% of variance (R² ≈ 0.005), 
+indicating sex alone is a weak predictor of insurance charges.
+
+## Model 2: Region Only
+
+Examine regional differences in insurance charges.
+
+```{r}
+model_region <- lm(charges ~ region, data = data)
+```
+
+### Model results
+```{r}
+tidy_region <- tidy(model_region, conf.int = TRUE)
+tidy_region %>% knitr::kable(caption = "Region Model Coefficients")
+```
+
+The intercept represents average charges in the northeast (baseline region). 
+Each regional coefficient shows the difference from northeast charges. 
+Southeast charges are slightly higher, while northwest and southwest are lower, 
+though differences are modest.
+
+### Model performance
+```{r}
+glance_region <- glance(model_region)
+glance_region %>% knitr::kable(caption = "Region Model Performance")
+```
+
+The model explains less than 1% of variance (R² ≈ 0.006), 
+confirming region is not a strong predictor of charges.
+
+## Model 3: Sex + Region
+
+Fit a combined model including both categorical predictors.
+
+```{r}
+model_both <- lm(charges ~ sex + region, data = data)
+```
+
+### Model results
+```{r}
+tidy_both <- tidy(model_both, conf.int = TRUE)
+tidy_both %>% knitr::kable(caption = "Combined Model Coefficients")
+```
+
+In this model, each coefficient represents the effect of that category 
+while controlling for the other variable. The sex effect remains similar to the univariate model, 
+and regional effects are largely unchanged, suggesting minimal confounding between these variables.
+
+### Model performance
+```{r}
+glance_both <- glance(model_both)
+glance_both %>% knitr::kable(caption = "Combined Model Performance")
+```
+
+The combined model explains approximately 1% of variance, only marginally better than either variable alone.
+
+## Model Comparison
+
+### ANOVA comparison
+```{r}
+anova_sex_both <- anova(model_sex, model_both)
+anova_sex_both %>% knitr::kable(caption = "ANOVA: Sex vs Combined")
+
+anova_region_both <- anova(model_region, model_both)
+anova_region_both %>% knitr::kable(caption = "ANOVA: Region vs Combined")
+```
+
+ANOVA results confirm that adding region to the sex model (or vice versa) 
+provides statistically significant improvement, though the practical effect size remains small.
+
+### Information criteria
+```{r}
+aic_comparison <- AIC(model_sex, model_region, model_both)
+aic_comparison %>% knitr::kable(caption = "AIC Comparison")
+
+bic_comparison <- BIC(model_sex, model_region, model_both)
+bic_comparison %>% knitr::kable(caption = "BIC Comparison")
+```
+
+AIC slightly favors the combined model, while BIC favors the simpler sex-only model. 
+This discrepancy reflects BIC's stronger penalty for model complexity. 
+Given the minimal improvement in R² when adding region (from 0.5% to 1.1%), 
+BIC's preference for the simpler model is more defensible, 
+as the added complexity does not justify the marginal gain in explanatory power.
+
+## Changing the Baseline
+
+### Sex with male as baseline
+```{r}
+data_male_baseline <- data %>%
+  mutate(sex = relevel(sex, ref = "male"))
+
+model_sex_male <- lm(charges ~ sex, data = data_male_baseline)
+tidy_sex_male <- tidy(model_sex_male, conf.int = TRUE)
+tidy_sex_male %>% knitr::kable(caption = "Sex Model (Male Baseline)")
+```
+
+When male is the baseline, the intercept now represents average charges for males, 
+and the sexfemale coefficient shows females pay $1,387 less. 
+The model fit (R²) remains unchanged; only the interpretation shifts.
+
+### Region with southwest as baseline
+```{r}
+data_sw_baseline <- data %>%
+  mutate(region = relevel(region, ref = "southwest"))
+
+model_region_sw <- lm(charges ~ region, data = data_sw_baseline)
+tidy_region_sw <- tidy(model_region_sw, conf.int = TRUE)
+tidy_region_sw %>% knitr::kable(caption = "Region Model (Southwest Baseline)")
+```
+
+With southwest as baseline, all regional coefficients are now relative to southwest charges. 
+The model explains the same variance; changing the baseline only alters coefficient interpretation, 
+not model quality.
+
+## Manual Dummy Variable Creation
+
+To understand how R handles categorical variables internally, 
+we manually create dummy variables and verify the results match automatic factor encoding.
+
+```{r}
+data_manual <- data %>%
+  mutate(
+    # Sex dummy (female = baseline, male = 1)
+    male = ifelse(sex == "male", 1, 0),
+    
+    # Region dummies (northeast = baseline)
+    northwest = ifelse(region == "northwest", 1, 0),
+    southeast = ifelse(region == "southeast", 1, 0),
+    southwest = ifelse(region == "southwest", 1, 0)
+  )
+
+model_manual <- lm(charges ~ male + northwest + southeast + southwest, 
+                   data = data_manual)
+tidy_manual <- tidy(model_manual, conf.int = TRUE)
+tidy_manual %>% knitr::kable(caption = "Manual Dummy Variables Model")
+```
+
+The manually created dummy variables produce identical results to automatic factor encoding, 
+confirming our understanding of R's internal handling of categorical predictors. 
+This demonstrates that for k categories, R creates k-1 dummy variables, 
+with one category serving as the reference against which others are compared.
+
+## Visualization: Coefficient Plots
+
+### Sex model coefficients
+```{r}
+tidy_sex %>%
+  filter(term != "(Intercept)") %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  labs(
+    x = "Predictor",
+    y = "Coefficient Estimate",
+    title = "Sex Model: Coefficient with 95% CI"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The coefficient plot shows males have higher charges than females, 
+with the confidence interval clearly excluding zero, indicating statistical significance.
+
+### Region model coefficients
+```{r}
+tidy_region %>%
+  filter(term != "(Intercept)") %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  labs(
+    x = "Predictor",
+    y = "Coefficient Estimate",
+    title = "Region Model: Coefficients with 95% CI"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Regional coefficients are relatively small in magnitude and some confidence intervals include zero, 
+reflecting weak regional effects on charges.
+
+### Combined model coefficients
+```{r}
+tidy_both %>%
+  filter(term != "(Intercept)") %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  coord_flip() +
+  labs(
+    x = "Predictor",
+    y = "Coefficient Estimate",
+    title = "Combined Model: Coefficients with 95% CI"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The combined model shows all coefficients remain similar to their univariate counterparts, 
+indicating minimal interaction or confounding between sex and region.
+
+## Conclusion
+
+This analysis demonstrates key concepts in handling categorical predictors through regression modeling:
+
+**Dummy Variable Encoding:** R automatically converts categorical variables into dummy variables using treatment coding. 
+For a variable with k categories, k-1 dummy variables are created, with one category serving as the reference baseline.
+
+**Reference Category:** By default, R selects the alphabetically first category as the baseline. 
+All other categories are compared against this reference through their dummy variable coefficients. 
+The baseline can be changed using `relevel()`, which alters interpretation but not model fit.
+
+**Coefficient Interpretation:** The intercept represents the mean outcome for the reference group. 
+Each dummy variable coefficient indicates the difference between that category and the reference. 
+A positive coefficient means that category has higher charges; negative means lower.
+
+**Model Performance:** Neither sex nor region emerged as strong predictors of insurance charges individually. 
+Sex explained approximately 0.5% of variance, region explained 0.6%, and together they explained only 1%. 
+This suggests other factors (such as smoking status, age, or BMI) are far more important in determining insurance costs.
+
+**Statistical vs Practical Significance:** While some effects achieved statistical significance due to large sample size, 
+the practical impact remains minimal. The difference between males and females ($1,387) is modest compared to 
+the range of insurance charges, and regional differences are even smaller.
+
+**Key Takeaway:** Categorical variables in regression require careful interpretation. 
+Understanding dummy variable encoding and reference categories is essential for correctly interpreting model coefficients. 
+While these models provide a foundation for understanding categorical predictors, 
+the weak explanatory power suggests more comprehensive models incorporating additional variables would be necessary 
+for meaningful prediction of insurance charges.
